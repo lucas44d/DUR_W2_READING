@@ -2,25 +2,44 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run C++",
+            "name": "Debug refractometer (GDB)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/main.exe",
-            "args": [],
+            "program": "${workspaceFolder}\\build\\refractometer.exe",
+            "args": ["${input:comPort}"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
-            "externalConsole": false,
+            "externalConsole": true,
             "MIMode": "gdb",
-            "miDebuggerPath": "gdb.exe",
-            "preLaunchTask": "Build C++",
-            "setupCommands": [
+            "preLaunchTask": "build refractometer"
+        },
+        {
+            "name": "Run Viewer (Qt)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}\\viewer\\build\\RefractometerViewer.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}\\viewer\\build",
+            "environment": [
                 {
-                    "description": "Activer le formatage natif GDB",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
+                    "name": "PATH",
+                    "value": "C:\\Qt\\6.11.2\\mingw_64\\bin;C:\\Qt\\Tools\\mingw1310_64\\bin;${env:PATH}"
                 }
-            ]
+            ],
+            "externalConsole": true,
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:\\Qt\\Tools\\mingw1310_64\\bin\\gdb.exe",
+            "preLaunchTask": "build viewer (Qt)"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "comPort",
+            "type": "promptString",
+            "description": "Port COM du refractometre (ex: COM5)",
+            "default": "COM5"
         }
     ]
 }

@@ -2,26 +2,40 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "type": "cppbuild",
-            "label": "Build C++",
+            "label": "build refractometer",
+            "type": "shell",
             "command": "g++",
             "args": [
                 "-g",
-                "${workspaceFolder}/src/main.cpp",
+                "-std=c++17",
+                "-Wall",
+                "-Wextra",
+                "${workspaceFolder}\\src\\main.cpp",
+                "${workspaceFolder}\\src\\serial.cpp",
+                "${workspaceFolder}\\src\\protocol.cpp",
+                "${workspaceFolder}\\src\\csv.cpp",
                 "-o",
-                "${workspaceFolder}/build/main.exe"
+                "${workspaceFolder}\\build\\refractometer.exe"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
-            "problemMatcher": [
-                "$gcc"
-            ],
+            "problemMatcher": ["$gcc"],
             "group": {
                 "kind": "build",
                 "isDefault": true
+            }
+        },
+        {
+            "label": "build viewer (Qt)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "."],
+            "options": {
+                "cwd": "${workspaceFolder}\\viewer\\build"
             },
-            "detail": "Compilation avec MinGW-w64"
+            "problemMatcher": ["$gcc"],
+            "group": "build"
         }
     ]
 }

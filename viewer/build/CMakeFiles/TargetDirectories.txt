@@ -1,0 +1,5 @@
+C:/Dev/DUR_W2_READING/viewer/build/CMakeFiles/RefractometerViewer.dir
+C:/Dev/DUR_W2_READING/viewer/build/CMakeFiles/edit_cache.dir
+C:/Dev/DUR_W2_READING/viewer/build/CMakeFiles/rebuild_cache.dir
+C:/Dev/DUR_W2_READING/viewer/build/CMakeFiles/RefractometerViewer_autogen_timestamp_deps.dir
+C:/Dev/DUR_W2_READING/viewer/build/CMakeFiles/RefractometerViewer_autogen.dir
