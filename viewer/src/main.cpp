@@ -6,11 +6,11 @@ Usage : RefractometerViewer.exe <chemin_du_csv>
 
 */
 
+#include "mainwindow.hpp"
+
 #include <QApplication>
 #include <QFileDialog>
 #include <QString>
-
-#include "mainwindow.hpp"
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);

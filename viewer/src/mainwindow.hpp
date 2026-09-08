@@ -20,8 +20,6 @@ On vient seulement lire le CSV (pas le port série) au fur et à mesure (toutes 
 #include <QtCharts/QLineSeries>
 #include <QtCharts/QValueAxis>
 
-
-// totalement inchange.
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -34,20 +32,22 @@ private slots:
 
 private:
     void processNewData(const QByteArray& newData);
-    void addPoint(qint64 timestampMs, double refractiveIndex);
+    void addRefractiveIndexPoint(qint64 timestampMs, double refractiveIndex);
+    void addRtdPoint(qint64 timestampMs, double concentration, double fT);
     void updateStatsLabel();
+    void updateRtdLabel();
     
     QString csvPath_;
     qint64 lastReadPos_ = 0;
     QString pendingPartialLine_;
     bool headerSkipped_ = false;
 
+    // graphique 1 : Indice de réfraction
     QChart* chart_;
     QLineSeries* series_;
     QDateTimeAxis* axisX_;
     QValueAxis* axisY_;
     QChartView* chartView_;
-    QTimer* pollTimer_;
     QLabel* statsLabel_;
     QPushButton* exportButton_;
 
@@ -58,6 +58,24 @@ private:
     double minAll_ = std::numeric_limits<double>::infinity();
     double maxAll_ = -std::numeric_limits<double>::infinity();
  
+    // graphique 2 : concentration + F(t)
+    QChart* chartRtd_;
+    QLineSeries* concentrationSeries_;
+    QLineSeries* fTSeries_;
+    QDateTimeAxis* axisXRtd_;
+    QValueAxis* axisYConcentration_;
+    QValueAxis* axisYFt_;
+    QChartView* chartViewRtd_;
+    QLabel* rtdLabel_;
+
+    // Accumulation du temps de residence
+    bool hasPrevTimestampForTau_ = false;
+    qint64 prevTimestampMsForTau_ = 0;
+    double runningTau_ = 0.0;
+    double lastFt_ = 0.0;
+ 
+    QTimer* pollTimer_;
+
     // Fenetre glissante : nombre max de points affiches a l'ecran, pour
     // rester lisible et performant meme sur une acquisition longue.
     static constexpr int kMaxPointsDisplayed = 200;

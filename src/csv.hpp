@@ -24,7 +24,7 @@ public:
 
     // Ajoute une ligne pour une mesure. `timestampPc` est la chaîne déjà formatée "YYYY-MM-DD HH:MM:SS.mmm" 
     // Force un flush disque après chaque ligne pour limiter la perte de données en cas d'arrêt brutal du programme.
-    void writeMeasurement(const std::string& timestampPc, const Measurement& m);
+    void writeMeasurement(const std::string& timestampPc, const Measurement& m, double concentration, double fT);
 
     void close();
     bool isOpen() const { return file_.is_open(); }
