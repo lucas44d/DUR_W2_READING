@@ -11,6 +11,8 @@ Detail :
 
     NOTE: il reste l'interface graphique avec qt à faire
 */ 
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 #include "serial.hpp"
 #include "protocol.hpp"
@@ -25,6 +27,9 @@ Detail :
 #include <sstream>
 #include <thread>
 #include <windows.h>
+#include <conio.h> 
+#include <optional>
+#include <algorithm>
 
 namespace {
 
@@ -39,13 +44,44 @@ BOOL WINAPI consoleCtrlHandler(DWORD ctrlType) {
     return FALSE;
 }
 
-// Affiche un buffer d'octets en ASCII, en remplaçant les caractères non
-// imprimables par un '.' pour ne pas casser l'affichage terminal.
-void printAscii(const std::vector<uint8_t>& data) {
-    for (uint8_t b : data) {
-        putchar((b >= 0x20 && b < 0x7F) ? static_cast<char>(b) : '.');
-    }
-    printf("\n");
+// Coefficients de l'étalonnage linéaire indice de réfraction -> concentration
+constexpr double kCalibA = 0.00146067;
+constexpr double kCalibB = 1.33251321;
+ 
+// Concentration initiale/finale de la solution (pour F(t))
+constexpr double kConcentrationInit = 0.0;
+constexpr double kConcentrationFinal = 4.0;
+
+struct AnalysisResult {
+    double concentration;
+    double fT;
+};
+
+AnalysisResult analyzeMeasurement(const Measurement& m) {
+    AnalysisResult r;
+    r.concentration = (m.refractiveIndex - kCalibB) / kCalibA;
+    r.fT = (r.concentration - kConcentrationInit) / (kConcentrationFinal - kConcentrationInit);
+    // Bornage entre 0 et 1 pour limiter l'impact du bruit de mesure
+    r.fT = std::clamp(r.fT, 0.0, 1.0);
+    return r;
+}
+
+//Envoie des données vers teleplot pour affichage en temps réel
+void sendToTeleplot(SOCKET sock, const sockaddr_in& destAddr, const Measurement& m,
+                     const AnalysisResult& analysis) {
+    std::ostringstream oss;
+ 
+    oss << "RefractiveIndex:" << m.refractiveIndex << "|g\n"
+        << "Brix:" << m.brix << "|g\n"
+        << "Temperature:" << m.temperature << "|g\n"
+        << "Concentration:" << analysis.concentration << "|g\n"
+        << "F_t:" << analysis.fT << "|g\n";
+ 
+    std::string msg = oss.str();
+ 
+    sendto(sock, msg.c_str(), static_cast<int>(msg.length()), 0,
+           reinterpret_cast<const sockaddr*>(&destAddr),
+           sizeof(destAddr));
 }
 
 // Heure système locale du PC : "YYYY-MM-DD HH:MM:SS.mmm"
@@ -74,6 +110,12 @@ std::string nowFilenameTimestamp() {
     oss << std::put_time(&tmBuf, "%Y%m%d_%H%M%S");
     return oss.str();
 }
+
+// Structure pour garder en mémoire le dernier point lu
+struct LastSample {
+    Measurement measurement;
+    std::string timestamp;
+};
 
 } // namespace
 
@@ -112,46 +154,89 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     std::cout << "Enregistrement CSV dans : " << csvPath << "\n";
+    std::cout << " Appuyez sur [ESPACE] ou [ENTREE] pour enregistrer un point dans le CSV\n";
     std::cout << "Lecture en cours (Ctrl+C pour arreter proprement)...\n\n";
 
     LineAccumulator accumulator;
     std::vector<uint8_t> buffer;
+    std::optional<LastSample> latestSample;
+
+    // Initialisation du port Teleplot
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+    SOCKET teleplotSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    sockaddr_in teleplotAddr{};
+    teleplotAddr.sin_family = AF_INET;
+    teleplotAddr.sin_port = htons(47269);
+    inet_pton(AF_INET, "127.0.0.1", &teleplotAddr.sin_addr);
+
+    // Variable pour suivre l'état de l'enregistrement
+    bool recording = false;
 
     while (!g_stopRequested) {
-        size_t n = port.readAvailable(buffer);
 
+        // Gestion de la saisie clavier (Bascule On / Off)
+        if (_kbhit()) {
+            int ch = _getch();
+            if (ch == ' ' || ch == '\r' || ch == '\n') {
+                recording = !recording; // Inverse l'état (Play / Pause)
+                
+                if (recording) {
+                    std::cout << "\n>>> [DEBUT ENREGISTREMENT CONTINU] <<<\n\n";
+                } else {
+                    std::cout << "\n>>> [PAUSE ENREGISTREMENT] <<<\n\n";
+                }
+            }
+        }
+        
+        // Lecture port série et traitement des données
+        size_t n = port.readAvailable(buffer);
         if (n > 0) {
             std::string arrivalTime = nowTimestamp();
-
-            std::cout << "----------------------------------------\n";
-            std::cout << "Received " << n << " bytes\n\n";
-            std::cout << "\nASCII:\n";
-            printAscii(buffer);
 
             for (const std::string& line : accumulator.addBytes(buffer)) {
                 std::string err;
                 if (auto m = parseLine(line, err)) {
-                    std::cout << "\n[MESURE] "
+                    
+                    // calcul unique pour la concentration et F(t)
+                    AnalysisResult analysis = analyzeMeasurement(*m);
+
+                    std::cout << "[FLUX LIVE] "
                               << "n=" << m->measurementNumber
-                              << " | indice=" << std::fixed << std::setprecision(5) << m->refractiveIndex
-                              << " | temperature=" << std::setprecision(2) << m->temperature
-                              << " | brix=" << m->brix
-                              << " | heure_reception=" << arrivalTime
-                              << "\n";
-                    csv.writeMeasurement(arrivalTime, *m);
+                              << " | RI=" << std::fixed << std::setprecision(5) << m->refractiveIndex
+                              << " | Brix=" << std::setprecision(2) << m->brix
+                              << " | Conc=" << std::setprecision(3) << analysis.concentration << " %"
+                              << " | F(t)=" << std::setprecision(4) << analysis.fT;
+
+                    // Enregistrement CSV automatique SI le mode enregistrement est actif
+                    if (recording) {
+                        csv.writeMeasurement(arrivalTime, *m, analysis.concentration, analysis.fT);
+                        std::cout << " --> [REC]";
+                    }
+
+                    std::cout << "\n";
+
+                    // Envoi vers Teleplot (toujours actif)
+                    if (teleplotSock != INVALID_SOCKET) {
+                        sendToTeleplot(teleplotSock, teleplotAddr, *m, analysis);
+                    }
                 } else {
                     std::cout << "\n[ERREUR PARSING] " << err << "\n";
                 }
             }
-            std::cout << "\n";
         }
 
-
-        // Evite de saturer le CPU en boucle serree entre deux lectures ;
-        // la mesure n'arrivant qu'a ~1 Hz, ce delai est largement suffisant.
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 
+    // Nettoyage à la fermeture pour teleplot
+    if (teleplotSock != INVALID_SOCKET) {
+        closesocket(teleplotSock);
+    }
+    WSACleanup();
+
+    // Fermeture du port série et du CSV
     std::cout << "\nArret demande, fermeture...\n";
     csv.close();
     port.close();

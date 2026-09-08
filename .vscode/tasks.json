@@ -15,7 +15,8 @@
                 "${workspaceFolder}\\src\\protocol.cpp",
                 "${workspaceFolder}\\src\\csv.cpp",
                 "-o",
-                "${workspaceFolder}\\build\\refractometer.exe"
+                "${workspaceFolder}\\build\\refractometer.exe",
+                "-lws2_32"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
